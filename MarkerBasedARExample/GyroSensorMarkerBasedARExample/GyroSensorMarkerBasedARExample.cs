@@ -4,8 +4,11 @@ using OpenCVForUnity.UnityUtils;
 using OpenCVForUnity.UnityUtils.Helper;
 using OpenCVMarkerBasedAR;
 using System.Collections.Generic;
+using System;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
+using System.Linq;
 
 namespace MarkerBasedARExample
 {
@@ -16,6 +19,10 @@ namespace MarkerBasedARExample
     [RequireComponent(typeof(WebCamTextureToMatHelper))]
     public class GyroSensorMarkerBasedARExample : MonoBehaviour
     {
+        // Add a public property to store the current stage
+        public int CurrentStage { get; set; } = 1;
+
+        private int selectedMarkerIndex;
         /// <summary>
         /// The AR camera.
         /// </summary>
@@ -84,7 +91,7 @@ namespace MarkerBasedARExample
         /// </summary>
         public void OnWebCamTextureToMatHelperInitialized()
         {
-            Debug.Log("OnWebCamTextureToMatHelperInitialized");
+            //Debug.Log("OnWebCamTextureToMatHelperInitialized");
 
             Mat webCamTextureMat = webCamTextureToMatHelper.GetMat();
 
@@ -94,7 +101,7 @@ namespace MarkerBasedARExample
 
             gameObject.transform.localScale = new Vector3(webCamTextureMat.cols(), webCamTextureMat.rows(), 1);
 
-            Debug.Log("Screen.width " + Screen.width + " Screen.height " + Screen.height + " Screen.orientation " + Screen.orientation);
+            //Debug.Log("Screen.width " + Screen.width + " Screen.height " + Screen.height + " Screen.orientation " + Screen.orientation);
 
             float width = webCamTextureMat.width();
             float height = webCamTextureMat.height();
@@ -129,10 +136,10 @@ namespace MarkerBasedARExample
             camMatrix.put(2, 0, 0);
             camMatrix.put(2, 1, 0);
             camMatrix.put(2, 2, 1.0f);
-            Debug.Log("camMatrix " + camMatrix.dump());
+            //Debug.Log("camMatrix " + camMatrix.dump());
 
             distCoeffs = new MatOfDouble(0, 0, 0, 0);
-            Debug.Log("distCoeffs " + distCoeffs.dump());
+            //Debug.Log("distCoeffs " + distCoeffs.dump());
 
             //calibration camera
             Size imageSize = new Size(width * imageSizeScale, height * imageSizeScale);
@@ -147,21 +154,21 @@ namespace MarkerBasedARExample
 
             Calib3d.calibrationMatrixValues(camMatrix, imageSize, apertureWidth, apertureHeight, fovx, fovy, focalLength, principalPoint, aspectratio);
 
-            Debug.Log("imageSize " + imageSize.ToString());
-            Debug.Log("apertureWidth " + apertureWidth);
-            Debug.Log("apertureHeight " + apertureHeight);
-            Debug.Log("fovx " + fovx[0]);
-            Debug.Log("fovy " + fovy[0]);
-            Debug.Log("focalLength " + focalLength[0]);
-            Debug.Log("principalPoint " + principalPoint.ToString());
-            Debug.Log("aspectratio " + aspectratio[0]);
+            // Debug.Log("imageSize " + imageSize.ToString());
+            // Debug.Log("apertureWidth " + apertureWidth);
+            // Debug.Log("apertureHeight " + apertureHeight);
+            // Debug.Log("fovx " + fovx[0]);
+            // Debug.Log("fovy " + fovy[0]);
+            // Debug.Log("focalLength " + focalLength[0]);
+            // Debug.Log("principalPoint " + principalPoint.ToString());
+            // Debug.Log("aspectratio " + aspectratio[0]);
 
             // To convert the difference of the FOV value of the OpenCV and Unity. 
             double fovXScale = (2.0 * Mathf.Atan((float)(imageSize.width / (2.0 * fx)))) / (Mathf.Atan2((float)cx, (float)fx) + Mathf.Atan2((float)(imageSize.width - cx), (float)fx));
             double fovYScale = (2.0 * Mathf.Atan((float)(imageSize.height / (2.0 * fy)))) / (Mathf.Atan2((float)cy, (float)fy) + Mathf.Atan2((float)(imageSize.height - cy), (float)fy));
 
-            Debug.Log("fovXScale " + fovXScale);
-            Debug.Log("fovYScale " + fovYScale);
+            // Debug.Log("fovXScale " + fovXScale);
+            // Debug.Log("fovYScale " + fovYScale);
 
 
             // Adjust Unity Camera FOV https://github.com/opencv/opencv/commit/8ed1945ccd52501f5ab22bdec6aa1f91f1e2cfd4
@@ -185,10 +192,10 @@ namespace MarkerBasedARExample
 
 
             invertYM = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, new Vector3(1, -1, 1));
-            Debug.Log("invertYM " + invertYM.ToString());
+            //Debug.Log("invertYM " + invertYM.ToString());
 
             invertZM = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, new Vector3(1, 1, -1));
-            Debug.Log("invertZM " + invertZM.ToString());
+            //Debug.Log("invertZM " + invertZM.ToString());
 
 
             //if WebCamera is frontFaceing,flip Mat.
@@ -215,77 +222,115 @@ namespace MarkerBasedARExample
         // Update is called once per frame
         void Update()
         {
-            if (webCamTextureToMatHelper.IsPlaying() && webCamTextureToMatHelper.DidUpdateThisFrame())
+            if (!webCamTextureToMatHelper.IsPlaying() || !webCamTextureToMatHelper.DidUpdateThisFrame())
             {
+                return;
+            }
 
-                UpdateARCameraTransform();
+            //UpdateUI();
 
-                Mat rgbaMat = webCamTextureToMatHelper.GetMat();
+            UpdateARCameraTransform();
 
-                markerDetector.processFrame(rgbaMat, 1);
+            Mat rgbaMat = webCamTextureToMatHelper.GetMat();
+            int selectedMarkerIndex = PlayerPrefs.GetInt("SelectedMarkerIndex", -1);
 
+            ProcessMarkers(rgbaMat, selectedMarkerIndex);
 
-                foreach (MarkerSettings settings in markerSettings)
+            Utils.fastMatToTexture2D(rgbaMat, texture);
+        }
+
+        void UpdateUI(string buttonText)
+        {
+            //int selectedMarkerIndex = PlayerPrefs.GetInt("SelectedMarkerIndex", -1);
+            //buttonText = $"Marker: {selectedMarkerIndex} {markerSettings[selectedMarkerIndex].getMarkerId()} Stage: {CurrentStage}";
+            GameObject myButtonObject = GameObject.Find("ChangeCameraButton");
+            Button myButton = myButtonObject.GetComponent<Button>();
+            myButton.GetComponentInChildren<Text>().text = buttonText;
+        }
+
+        void ProcessMarkers(Mat rgbaMat, int selectedMarkerIndex)
+        {
+            markerDetector.processFrame(rgbaMat, 1);
+
+            int selectedMarkerId = markerSettings[selectedMarkerIndex].getMarkerId();
+
+            List<Marker> findMarkers = markerDetector.getFindMarkers();
+            if (CurrentStage == 1)
+            {
+                //debug
+                //UpdateUI();
+
+                foreach (Marker marker in findMarkers)
                 {
-                    if (!settings.shouldNotSetToInactivePerFrame)
+                    MarkerSettings settings = markerSettings.FirstOrDefault(s => s.getMarkerId() == marker.id);
+
+                    string buttonText = $"Marker: {selectedMarkerIndex} {markerSettings[selectedMarkerIndex].getMarkerId()} Stage: {CurrentStage} found {marker.id}";
+                    UpdateUI(buttonText);
+
+                    if (settings != null)
                     {
-                        settings.setAllARGameObjectsDisable();
+                        bool isSelectedMarker = (marker.id == selectedMarkerId);
+                        UpdateARGameObject(marker, settings, isSelectedMarker);
+                    }
+                }
+            }
+            else if (CurrentStage == 2)
+            {
+                foreach (Marker marker in findMarkers)
+                {
+                    //debug
+                    string buttonText = $"Marker: {selectedMarkerIndex} {markerSettings[selectedMarkerIndex].getMarkerId()} Stage: {CurrentStage} found {marker.id}";
+                    UpdateUI(buttonText);
+
+                    MarkerSettings settings = markerSettings.FirstOrDefault(s => s.getMarkerId() == marker.id);
+
+                    if (settings != null)
+                    {
+                        UpdateARGameObject(marker, settings, true);
+                    }
+                }
+            }
+        }
+
+        void UpdateARGameObject(Marker marker, MarkerSettings settings, bool activateObject)
+        {
+            Matrix4x4 transformationM = marker.transformation;
+            Matrix4x4 adjustedTransformationMatrix = ModifyTransformationMatrix(transformationM);
+
+            GameObject ARGameObject = settings.getARGameObject();
+
+            settings.debugText.text = settings.getMarkerId().ToString();
+
+            if (ARGameObject != null)
+            {
+                ARUtils.SetTransformFromMatrix(ARGameObject.transform, ref adjustedTransformationMatrix);
+
+                if (activateObject)
+                {
+                    DelayableSetActive obj = ARGameObject.GetComponent<DelayableSetActive>();
+
+                    if (obj != null)
+                    {
+                        obj.SetActive(true);
                     }
                     else
                     {
-                        GameObject ARGameObject = settings.getARGameObject();
-                        if (ARGameObject != null)
-                        {
-                            DelayableSetActive obj = ARGameObject.GetComponent<DelayableSetActive>();
-                            if (obj != null)
-                            {
-                                obj.SetActive(false, 0.5f);
-                            }
-                        }
+                        ARGameObject.SetActive(true);
                     }
                 }
-
-                List<Marker> findMarkers = markerDetector.getFindMarkers();
-                for (int i = 0; i < findMarkers.Count; i++)
+                else
                 {
-                    Marker marker = findMarkers[i];
+                    DelayableSetActive obj = ARGameObject.GetComponent<DelayableSetActive>();
 
-                    foreach (MarkerSettings settings in markerSettings)
+                    if (obj != null)
                     {
-                        if (marker.id == settings.getMarkerId())
-                        {
-                            Matrix4x4 transformationM = marker.transformation;
-
-                            // right-handed coordinates system (OpenCV) to left-handed one (Unity)
-                            // https://stackoverflow.com/questions/30234945/change-handedness-of-a-row-major-4x4-transformation-matrix
-                            Matrix4x4 ARM = invertYM * transformationM * invertYM;
-
-                            // Apply Y-axis and Z-axis refletion matrix. (Adjust the posture of the AR object)
-                            ARM = ARM * invertYM * invertZM;
-
-                            ARM = ARCamera.transform.localToWorldMatrix * ARM;
-
-                            //Debug.Log("ARM " + ARM.ToString());
-
-                            GameObject ARGameObject = settings.getARGameObject();
-                            if (ARGameObject != null)
-                            {
-                                ARUtils.SetTransformFromMatrix(ARGameObject.transform, ref ARM);
-
-                                DelayableSetActive obj = ARGameObject.GetComponent<DelayableSetActive>();
-                                if (obj != null)
-                                {
-                                    obj.SetActive(true);
-                                }
-                                else
-                                {
-                                    ARGameObject.SetActive(true);
-                                }
-                            }
-                        }
+                        obj.SetActive(false);
+                    }
+                    else
+                    {
+                        ARGameObject.SetActive(false);
                     }
                 }
-                Utils.fastMatToTexture2D(rgbaMat, texture);
             }
         }
 
@@ -366,6 +411,17 @@ namespace MarkerBasedARExample
         public void OnChangeCameraButtonClick()
         {
             webCamTextureToMatHelper.requestedIsFrontFacing = !webCamTextureToMatHelper.IsFrontFacing();
+        }
+
+        private Matrix4x4 ModifyTransformationMatrix(Matrix4x4 transformationMatrix) {
+
+            Matrix4x4 ARM = invertYM * transformationMatrix * invertYM;
+
+            ARM = ARM * invertYM * invertZM;
+
+            ARM = ARCamera.transform.localToWorldMatrix * ARM;
+
+            return ARM;
         }
     }
 }

@@ -1,5 +1,8 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
+using OpenCVMarkerBasedAR;
+using System.Collections.Generic;
 
 namespace MarkerBasedARExample
 {
@@ -8,6 +11,7 @@ namespace MarkerBasedARExample
     /// </summary>
     public class ShowARMarker : MonoBehaviour
     {
+        //public Button myButton;
         /// <summary>
         /// Show ARMarker
         /// </summary>
@@ -17,6 +21,12 @@ namespace MarkerBasedARExample
         /// The index.
         /// </summary>
         int index = 0;
+
+        [System.Serializable]
+        public class ARMarkerData
+        {
+            public int selectedMarkerIndex;
+        }
 
         // Use this for initialization
         void Start()
@@ -68,6 +78,17 @@ namespace MarkerBasedARExample
         {
             index = (index + 1) % markerTexture.Length;
             gameObject.GetComponent<Renderer>().material.mainTexture = markerTexture[index];
+
+            // Store the selected marker index in PlayerPrefs
+            PlayerPrefs.SetInt("SelectedMarkerIndex", index);
+            PlayerPrefs.Save();
+            int savedIndex = PlayerPrefs.GetInt("SelectedMarkerIndex");
+            GameObject myButtonObject = GameObject.Find("ChangeMarkerButton");
+            Button myButton = myButtonObject.GetComponent<Button>();
+            myButton.GetComponentInChildren<Text>().text = "Selected Marker: " + index.ToString() + " PlayerPrefs:" + savedIndex.ToString();
         }
+        
+        //TODO: store the selected marker index in file for access by other scripts, run in android
+
     }
 }

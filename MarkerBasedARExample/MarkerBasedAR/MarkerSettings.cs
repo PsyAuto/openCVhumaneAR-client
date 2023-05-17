@@ -1,3 +1,4 @@
+using UnityEngine.UI;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -9,6 +10,11 @@ namespace OpenCVMarkerBasedAR
     /// </summary>
     public class MarkerSettings : MonoBehaviour
     {
+        /// <summary>
+        /// debug text
+        /// </summary>
+        public Text debugText; 
+
         /// <summary>
         /// The marker design.
         /// </summary>
@@ -123,6 +129,9 @@ namespace OpenCVMarkerBasedAR
             {
                 item.SetActive(false);
             }
+        }
+        public void printDebug(string text){
+            debugText.text = text;
         }
     }
 }
