@@ -262,10 +262,10 @@ namespace MarkerBasedARExample
 
                 foreach (Marker marker in findMarkers)
                 {
-                    MarkerSettings settings = markerSettings.FirstOrDefault(s => s.getMarkerId() == marker.id);
-
                     string buttonText = $"Marker: {selectedMarkerIndex} {markerSettings[selectedMarkerIndex].getMarkerId()} Stage: {CurrentStage} found {marker.id}";
                     UpdateUI(buttonText);
+
+                    MarkerSettings settings = markerSettings.FirstOrDefault(s => s.getMarkerId() == marker.id);
 
                     if (settings != null)
                     {

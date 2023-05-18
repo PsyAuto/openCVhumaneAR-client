@@ -97,6 +97,19 @@ namespace OpenCVMarkerBasedAR
             return null;
         }
 
+        public Vector3 getARGameObjectPosition()
+        {
+            GameObject arGameObject = getARGameObject();
+            if (arGameObject != null)
+            {
+                return arGameObject.transform.position;
+            }
+            else
+            {
+                return Vector3.zero;
+            }
+        }
+
         /// <summary>
         /// Sets all AR game objects disable.
         /// </summary>
