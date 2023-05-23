@@ -68,6 +68,13 @@ namespace MarkerBasedARExample
         /// </summary>
         WebCamTextureToMatHelper webCamTextureToMatHelper;
 
+        /// <summary>
+        /// position of selected marker
+        /// </summary>
+        Vector3 selectedMarkerPosition =  Vector3.zero;
+
+        private Button changeCameraButton;
+
 #if UNITY_EDITOR
         Vector3 rot;
 #endif
@@ -84,6 +91,10 @@ namespace MarkerBasedARExample
 #else
             Input.gyro.enabled = true;
 #endif
+
+            // Find the "ChangeCameraButton" object and get its Button component
+            GameObject myButtonObject = GameObject.Find("ChangeCameraButton");
+            changeCameraButton = myButtonObject.GetComponent<Button>();
         }
 
         /// <summary>
@@ -219,15 +230,19 @@ namespace MarkerBasedARExample
             Debug.Log("OnWebCamTextureToMatHelperErrorOccurred " + errorCode);
         }
 
+        private float lastUpdateTime = 0f;
+        private float updateInterval = 0.05f;
+
         // Update is called once per frame
         void Update()
         {
+            // if (Time.time - lastUpdateTime >= updateInterval)
+            // {
+            lastUpdateTime = Time.time;
             if (!webCamTextureToMatHelper.IsPlaying() || !webCamTextureToMatHelper.DidUpdateThisFrame())
             {
                 return;
             }
-
-            //UpdateUI();
 
             UpdateARCameraTransform();
 
@@ -237,15 +252,13 @@ namespace MarkerBasedARExample
             ProcessMarkers(rgbaMat, selectedMarkerIndex);
 
             Utils.fastMatToTexture2D(rgbaMat, texture);
+            // }
         }
 
         void UpdateUI(string buttonText)
         {
-            //int selectedMarkerIndex = PlayerPrefs.GetInt("SelectedMarkerIndex", -1);
-            //buttonText = $"Marker: {selectedMarkerIndex} {markerSettings[selectedMarkerIndex].getMarkerId()} Stage: {CurrentStage}";
-            GameObject myButtonObject = GameObject.Find("ChangeCameraButton");
-            Button myButton = myButtonObject.GetComponent<Button>();
-            myButton.GetComponentInChildren<Text>().text = buttonText;
+            // Update the text of the button using the stored reference
+            changeCameraButton.GetComponentInChildren<Text>().text = buttonText;
         }
 
         void ProcessMarkers(Mat rgbaMat, int selectedMarkerIndex)
@@ -254,17 +267,18 @@ namespace MarkerBasedARExample
 
             int selectedMarkerId = markerSettings[selectedMarkerIndex].getMarkerId();
 
+            // findMarkers are the markers that are found in the current frame
             List<Marker> findMarkers = markerDetector.getFindMarkers();
             if (CurrentStage == 1)
             {
                 //debug
-                //UpdateUI();
+                string buttonText = $"Marker: {selectedMarkerIndex} {markerSettings[selectedMarkerIndex].getMarkerId()} Stage: {CurrentStage}";
+                UpdateUI(buttonText);
+
+                HideDetectionRange();
 
                 foreach (Marker marker in findMarkers)
                 {
-                    string buttonText = $"Marker: {selectedMarkerIndex} {markerSettings[selectedMarkerIndex].getMarkerId()} Stage: {CurrentStage} found {marker.id}";
-                    UpdateUI(buttonText);
-
                     MarkerSettings settings = markerSettings.FirstOrDefault(s => s.getMarkerId() == marker.id);
 
                     if (settings != null)
@@ -276,19 +290,32 @@ namespace MarkerBasedARExample
             }
             else if (CurrentStage == 2)
             {
+                //debug
+                string message = "Neighbours: ";
+                
                 foreach (Marker marker in findMarkers)
                 {
-                    //debug
-                    string buttonText = $"Marker: {selectedMarkerIndex} {markerSettings[selectedMarkerIndex].getMarkerId()} Stage: {CurrentStage} found {marker.id}";
-                    UpdateUI(buttonText);
-
                     MarkerSettings settings = markerSettings.FirstOrDefault(s => s.getMarkerId() == marker.id);
 
                     if (settings != null)
                     {
                         UpdateARGameObject(marker, settings, true);
+
+                        SpawnMarkerRadius(markerSettings[selectedMarkerIndex], 3f);
+                        // selectedMarkerPosition is the position of the selected marker
+                        selectedMarkerPosition =  markerSettings[selectedMarkerIndex].getARGameObject().transform.position;
+                        // if the marker is not the selected marker and is within the radius of the selected marker then it is a neighbour
+                        if (settings.getMarkerId() != selectedMarkerId && Vector3.Distance(selectedMarkerPosition, settings.getARGameObject().transform.position) <= 3f)
+                        {
+                            message += marker.id + ", ";
+                        }
+
                     }
                 }
+                //debug
+                string buttonText = $"Marker: {markerSettings[selectedMarkerIndex].getMarkerId()} Stage: {CurrentStage} {message}";
+                UpdateUI(buttonText);
+                ShowDetectionRange();
             }
         }
 
@@ -422,6 +449,61 @@ namespace MarkerBasedARExample
             ARM = ARCamera.transform.localToWorldMatrix * ARM;
 
             return ARM;
+        }
+
+        void SpawnMarkerRadius(MarkerSettings settings, float radius)
+        {
+            // Get the GameObject associated with the marker
+            GameObject arGameObject = settings.getARGameObject();
+            if (arGameObject != null)
+            {
+                // Get the DetectionRange GameObject
+                GameObject detectionRange = GameObject.Find("DetectionRange");
+
+                // Set the position of the DetectionRange to the position of the AR GameObject
+                detectionRange.transform.position = arGameObject.transform.position;
+
+                // Set the scale of the DetectionRange based on the radius
+                float diameter = radius * 2f;
+                detectionRange.transform.localScale = new Vector3(diameter, 0.1f, diameter);
+            }
+        }
+
+        void ShowDetectionRange()
+        {
+            GameObject detectionRange = GameObject.Find("DetectionRange");
+            if (detectionRange != null)
+            {
+                detectionRange.layer = LayerMask.NameToLayer("AR");
+            }
+        }
+
+        void HideDetectionRange()
+        {
+            GameObject detectionRange = GameObject.Find("DetectionRange");
+            if (detectionRange != null)
+            {
+                detectionRange.layer = LayerMask.NameToLayer("Default");
+            }
+        }
+
+        private List<MarkerSettings> FindMarkerNeighbours(MarkerSettings[] markerSettings, int selectedMarkerId, float radius){
+            //find the distance between the selected marker and all other markers
+            //if the distance is less than the radius of the selected marker, add it to the list of neighbours
+            //return the list of neighbours
+            List<MarkerSettings> neighbours = new List<MarkerSettings>();
+            foreach (MarkerSettings marker in markerSettings)
+            {
+                if (marker.getMarkerId() != selectedMarkerId)
+                {
+                    float distance = Vector3.Distance(markerSettings[selectedMarkerId].getARGameObject().transform.position, marker.getARGameObject().transform.position);
+                    if (distance < radius)
+                    {
+                        neighbours.Add(marker);
+                    }
+                }
+            }
+            return neighbours;
         }
     }
 }
