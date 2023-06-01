@@ -18,7 +18,7 @@ namespace MarkerBasedARExample
         // Use this for initialization
         void Start()
         {
-            exampleTitle.text = "MarkerBasedAR Example " + Application.version;
+            exampleTitle.text = "HumaneAR [Client] " + Application.version;
 
             versionInfo.text = Core.NATIVE_LIBRARY_NAME + " " + OpenCVForUnity.UnityUtils.Utils.getVersion() + " (" + Core.VERSION + ")";
             versionInfo.text += " / UnityEditor " + Application.unityVersion;

@@ -9,6 +9,7 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using System.Linq;
+using TMPro;
 
 namespace MarkerBasedARExample
 {
@@ -74,6 +75,11 @@ namespace MarkerBasedARExample
         Vector3 selectedMarkerPosition =  Vector3.zero;
 
         private Button changeCameraButton;
+        private Button createKeywordsButton;
+
+        public Canvas keywordsInputCanvas;
+        public TMP_InputField keywordsInputField;
+        public Button submitButton;
 
 #if UNITY_EDITOR
         Vector3 rot;
@@ -95,6 +101,28 @@ namespace MarkerBasedARExample
             // Find the "ChangeCameraButton" object and get its Button component
             GameObject myButtonObject = GameObject.Find("ChangeCameraButton");
             changeCameraButton = myButtonObject.GetComponent<Button>();
+
+            // Find the "createKeywordsButton" object and get its Button component
+            GameObject createKeywordsObject = GameObject.Find("createKeywordsButton");
+            createKeywordsButton = createKeywordsObject.GetComponent<Button>();
+
+            // Set the initial visibility of the button based on the current stage
+            createKeywordsButton.gameObject.SetActive(CurrentStage == 1);
+
+            // Add an OnClick event to the "createKeywordsButton" that shows the text input canvas
+            createKeywordsButton.onClick.AddListener(() => {
+                keywordsInputCanvas.gameObject.SetActive(true);
+            });
+
+            // disable the text input canvas at the start
+            keywordsInputCanvas.gameObject.SetActive(false);
+
+            // Add an OnClick event to the "submitButton" that submits the text input and hides the canvas
+            submitButton.onClick.AddListener(() => {
+                string inputText = keywordsInputField.text;
+                Debug.Log("Input text: " + inputText);
+                keywordsInputCanvas.gameObject.SetActive(false);
+            });
         }
 
         /// <summary>
@@ -162,25 +190,11 @@ namespace MarkerBasedARExample
             Point principalPoint = new Point(0, 0);
             double[] aspectratio = new double[1];
 
-
             Calib3d.calibrationMatrixValues(camMatrix, imageSize, apertureWidth, apertureHeight, fovx, fovy, focalLength, principalPoint, aspectratio);
-
-            // Debug.Log("imageSize " + imageSize.ToString());
-            // Debug.Log("apertureWidth " + apertureWidth);
-            // Debug.Log("apertureHeight " + apertureHeight);
-            // Debug.Log("fovx " + fovx[0]);
-            // Debug.Log("fovy " + fovy[0]);
-            // Debug.Log("focalLength " + focalLength[0]);
-            // Debug.Log("principalPoint " + principalPoint.ToString());
-            // Debug.Log("aspectratio " + aspectratio[0]);
 
             // To convert the difference of the FOV value of the OpenCV and Unity. 
             double fovXScale = (2.0 * Mathf.Atan((float)(imageSize.width / (2.0 * fx)))) / (Mathf.Atan2((float)cx, (float)fx) + Mathf.Atan2((float)(imageSize.width - cx), (float)fx));
             double fovYScale = (2.0 * Mathf.Atan((float)(imageSize.height / (2.0 * fy)))) / (Mathf.Atan2((float)cy, (float)fy) + Mathf.Atan2((float)(imageSize.height - cy), (float)fy));
-
-            // Debug.Log("fovXScale " + fovXScale);
-            // Debug.Log("fovYScale " + fovYScale);
-
 
             // Adjust Unity Camera FOV https://github.com/opencv/opencv/commit/8ed1945ccd52501f5ab22bdec6aa1f91f1e2cfd4
             if (widthScale < heightScale)
@@ -191,7 +205,6 @@ namespace MarkerBasedARExample
             {
                 ARCamera.fieldOfView = (float)(fovy[0] * fovYScale);
             }
-
 
             MarkerDesign[] markerDesigns = new MarkerDesign[markerSettings.Length];
             for (int i = 0; i < markerDesigns.Length; i++)
@@ -230,15 +243,15 @@ namespace MarkerBasedARExample
             Debug.Log("OnWebCamTextureToMatHelperErrorOccurred " + errorCode);
         }
 
-        private float lastUpdateTime = 0f;
-        private float updateInterval = 0.05f;
+        // private float lastUpdateTime = 0f;
+        // private float updateInterval = 0.05f;
 
         // Update is called once per frame
         void Update()
         {
             // if (Time.time - lastUpdateTime >= updateInterval)
             // {
-            lastUpdateTime = Time.time;
+            // lastUpdateTime = Time.time;
             if (!webCamTextureToMatHelper.IsPlaying() || !webCamTextureToMatHelper.DidUpdateThisFrame())
             {
                 return;
@@ -259,6 +272,9 @@ namespace MarkerBasedARExample
         {
             // Update the text of the button using the stored reference
             changeCameraButton.GetComponentInChildren<Text>().text = buttonText;
+
+            // Update the visibility of the "createKeywordsButton" based on the current stage
+            createKeywordsButton.gameObject.SetActive(CurrentStage == 1);
         }
 
         void ProcessMarkers(Mat rgbaMat, int selectedMarkerIndex)
