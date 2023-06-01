@@ -128,7 +128,7 @@ namespace Agent
 
         private IEnumerator SendCoroutine(string json)
         {
-            UnityWebRequest www = UnityWebRequest.Post(url + "/update", json);
+            UnityWebRequest www = UnityWebRequest.PostWwwForm(url + "/update", json);
             www.SetRequestHeader("Content-Type", "application/json");
             yield return www.SendWebRequest();
 
