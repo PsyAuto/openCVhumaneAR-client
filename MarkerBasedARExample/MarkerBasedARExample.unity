@@ -230,9 +230,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 779095656f0c1c0499426237a13f7755, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  exampleTitle: {fileID: 193217595}
-  versionInfo: {fileID: 157406082}
-  scrollRect: {fileID: 1699408499}
 --- !u!1 &157406081
 GameObject:
   m_ObjectHideFlags: 0
@@ -893,6 +890,8 @@ GameObject:
   m_Component:
   - component: {fileID: 521356167}
   - component: {fileID: 521356168}
+  - component: {fileID: 521356169}
+  - component: {fileID: 521356170}
   m_Layer: 0
   m_Name: Agent
   m_TagString: Untagged
@@ -928,9 +927,42 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 80fe8071b0ab8d04496ca8195d409455, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+--- !u!114 &521356169
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 521356166}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 91b891fe27fe5474db6507d4bb191bf3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
   url: http://localhost:3000
   debug: 1
-  debugText: {fileID: 849291930}
+  userID: 0
+  selectedMarkerIndex: 0
+  neighborKeywords: 
+  myKeywords: 
+  newKeywords: 
+  currentStage: 0
+  myArticle: 
+  neighborArticles: []
+  debugText: {fileID: 849291934}
+--- !u!114 &521356170
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 521356166}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 71b7d47a43d975d44a31f93a4a31dc6e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  newKeywords: 
 --- !u!1 &637170503
 GameObject:
   m_ObjectHideFlags: 0
@@ -1189,7 +1221,7 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 2129784511}
   m_HandleRect: {fileID: 2129784510}
   m_Direction: 2
-  m_Value: 1
+  m_Value: 0
   m_Size: 1
   m_NumberOfSteps: 0
   m_OnValueChanged:
@@ -1432,6 +1464,7 @@ GameObject:
   - component: {fileID: 849291932}
   - component: {fileID: 849291931}
   - component: {fileID: 849291930}
+  - component: {fileID: 849291934}
   m_Layer: 5
   m_Name: DebugText
   m_TagString: Untagged
@@ -1473,8 +1506,8 @@ MonoBehaviour:
       m_Calls: []
   m_text: connection status...
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
-  m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: c62286f60900ef64fa3ed3d711de66e8, type: 2}
+  m_sharedMaterial: {fileID: 2180264, guid: c62286f60900ef64fa3ed3d711de66e8, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
@@ -1568,6 +1601,18 @@ RectTransform:
   m_AnchoredPosition: {x: -158, y: -29}
   m_SizeDelta: {x: 310, y: 50}
   m_Pivot: {x: 0.5, y: 0.5}
+--- !u!114 &849291934
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 849291929}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ea606785701d9c44697e52203c9058fe, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &878486322
 GameObject:
   m_ObjectHideFlags: 0

@@ -3,7 +3,7 @@ using UnityEngine;
 public class ApplicationLayer : MonoBehaviour
 {
     public APIClient apiClient;
-    public string name;
+    public new string name;
     public int age;
 
     private void Start()

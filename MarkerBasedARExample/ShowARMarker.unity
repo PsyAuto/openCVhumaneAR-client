@@ -641,12 +641,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3fb65ddd3776c8d4dad988a9e634d92f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  markerTexture:
-  - {fileID: 2800000, guid: 28b126bc99748b74ea6821ea4bff74c3, type: 3}
-  - {fileID: 2800000, guid: 04658cd9bcc92224e8544e66e3b41506, type: 3}
-  - {fileID: 2800000, guid: be7df27c107f29d4b993963c42d8801d, type: 3}
-  - {fileID: 2800000, guid: 6af7b81e4f66e4b4aa8ee7b1bf3dfb62, type: 3}
-  - {fileID: 2800000, guid: 07a6351f86ecdb34b84bfce897cd777b, type: 3}
 --- !u!1 &1718858172
 GameObject:
   m_ObjectHideFlags: 0
@@ -1012,10 +1006,9 @@ MonoBehaviour:
   m_GameObject: {fileID: 1794346223}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 8c8b06f80d9789340b44b3016a14a0f5, type: 3}
+  m_Script: {fileID: 0}
   m_Name: 
   m_EditorClassIdentifier: 
-  activeMarkerSettings: {fileID: 0}
 --- !u!4 &1794346225
 Transform:
   m_ObjectHideFlags: 0
