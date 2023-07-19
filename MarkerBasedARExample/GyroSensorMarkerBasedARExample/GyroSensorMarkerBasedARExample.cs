@@ -10,6 +10,8 @@ using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using System.Linq;
 using TMPro;
+using AgentAPI;
+using Newtonsoft.Json.Linq;
 
 namespace MarkerBasedARExample
 {
@@ -80,6 +82,9 @@ namespace MarkerBasedARExample
         public Canvas keywordsInputCanvas;
         public TMP_InputField keywordsInputField;
         public Button submitButton;
+        private UserAPI userAPI;
+        private float myRadius;
+        private List<string> globalUserIds = new List<string>();
 
 #if UNITY_EDITOR
         Vector3 rot;
@@ -88,6 +93,12 @@ namespace MarkerBasedARExample
         // Use this for initialization
         void Start()
         {
+            // Find the GameObject with the UserAPI component
+            GameObject userObject = GameObject.Find("Agent");
+
+            // Get the UserAPI component from the GameObject
+            userAPI = userObject.GetComponent<UserAPI>();
+
             webCamTextureToMatHelper = gameObject.GetComponent<WebCamTextureToMatHelper>();
 
             webCamTextureToMatHelper.Initialize();
@@ -123,8 +134,21 @@ namespace MarkerBasedARExample
                 Debug.Log("Input text: " + inputText);
                 keywordsInputCanvas.gameObject.SetActive(false);
             });
+
+            InvokeRepeating("GetCurrentStage", 0f, 1f);
+            InvokeRepeating("GetRadius", 0f, 1f);
+            InvokeRepeating("getUserIDs", 0f, 1f);
+            // print the globalUserIds list to the console
+            InvokeRepeating("PrintGlobalUserIds", 0f, 1f);
         }
 
+//create PrintGlobalUserIds
+        void PrintGlobalUserIds()
+        {
+            Debug.Log("Global User IDs: " + string.Join(", ", globalUserIds.ToArray()));
+            // print the first element of the globalUserIds list to the console
+            Debug.Log("First Global User ID: " + globalUserIds[0]);
+        }
         /// <summary>
         /// Raises the web cam texture to mat helper initialized event.
         /// </summary>
@@ -249,9 +273,6 @@ namespace MarkerBasedARExample
         // Update is called once per frame
         void Update()
         {
-            // if (Time.time - lastUpdateTime >= updateInterval)
-            // {
-            // lastUpdateTime = Time.time;
             if (!webCamTextureToMatHelper.IsPlaying() || !webCamTextureToMatHelper.DidUpdateThisFrame())
             {
                 return;
@@ -265,7 +286,39 @@ namespace MarkerBasedARExample
             ProcessMarkers(rgbaMat, selectedMarkerIndex);
 
             Utils.fastMatToTexture2D(rgbaMat, texture);
-            // }
+        }
+
+        void GetCurrentStage()
+        {
+            userAPI.GetCurrentStage((currentStage) =>
+            {
+                CurrentStage = int.Parse(currentStage);
+                Debug.Log("CurrentStage: " + CurrentStage);
+            });
+        }
+
+        void GetRadius()
+        {
+            userAPI.GetRadius((radius) =>
+            {
+                myRadius = float.Parse(radius);
+                Debug.Log("Radius: " + myRadius);
+            });
+        }
+
+        public void getUserIDs()
+        {
+            userAPI.GetAllUserIDs((userIDs) =>
+            {
+                JArray jsonArrayObj = JArray.Parse(userIDs);
+                JArray userIdsArray = (JArray)jsonArrayObj[0];
+                List<string> userIds = new List<string>();
+                foreach (JToken userId in userIdsArray)
+                {
+                    userIds.Add(userId.ToString());
+                }
+                globalUserIds = userIds;
+            });
         }
 
         void UpdateUI(string buttonText)
@@ -317,7 +370,7 @@ namespace MarkerBasedARExample
                     {
                         UpdateARGameObject(marker, settings, true);
 
-                        SpawnMarkerRadius(markerSettings[selectedMarkerIndex], 3f);
+                        SpawnMarkerRadius(markerSettings[selectedMarkerIndex], myRadius);
                         // selectedMarkerPosition is the position of the selected marker
                         selectedMarkerPosition =  markerSettings[selectedMarkerIndex].getARGameObject().transform.position;
                         // if the marker is not the selected marker and is within the radius of the selected marker then it is a neighbour

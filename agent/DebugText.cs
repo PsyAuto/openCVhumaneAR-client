@@ -10,6 +10,9 @@ namespace AgentAPI
 
         private void Start()
         {
+            GameObject rootObject = GameObject.Find("DebugCanvas");
+            transform.parent = rootObject.transform;
+            DontDestroyOnLoad(rootObject);
             textComponent = GetComponent<TextMeshProUGUI>();
         }
 
@@ -19,6 +22,16 @@ namespace AgentAPI
         }
 
         public void Clear()
+        {
+            textComponent.text = "";
+        }
+
+        public static void LogToText(string message, TextMeshProUGUI textComponent)
+        {
+            textComponent.text += message + "\n";
+        }
+
+        public static void ClearText(TextMeshProUGUI textComponent)
         {
             textComponent.text = "";
         }
