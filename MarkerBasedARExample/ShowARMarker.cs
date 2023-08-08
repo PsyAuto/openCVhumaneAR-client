@@ -3,6 +3,8 @@ using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using OpenCVMarkerBasedAR;
 using System.Collections.Generic;
+using AgentAPI;
+using System.Linq;
 
 namespace MarkerBasedARExample
 {
@@ -18,9 +20,16 @@ namespace MarkerBasedARExample
         public Texture2D[] markerTexture;
 
         /// <summary>
+        /// The marker settings.
+        /// </summary>
+        public MarkerSettings[] markerSettings;
+
+        /// <summary>
         /// The index.
         /// </summary>
         int index = 0;
+
+        private UserAPI userAPI;
 
         [System.Serializable]
         public class ARMarkerData
@@ -31,6 +40,12 @@ namespace MarkerBasedARExample
         // Use this for initialization
         void Start()
         {
+            // Find the GameObject with the UserAPI component
+            GameObject userObject = GameObject.Find("Agent");
+
+            // Get the UserAPI component from the GameObject
+            userAPI = userObject.GetComponent<UserAPI>();
+
             float width = gameObject.transform.localScale.x;
             float height = gameObject.transform.localScale.y;
 
@@ -46,6 +61,15 @@ namespace MarkerBasedARExample
             }
 
             gameObject.GetComponent<Renderer>().material.mainTexture = markerTexture[index];
+
+            // create a list of all marker ids
+            for (int i = 0; i < markerSettings.Length; i++)
+            {
+                Objects.allMarkerIds.Add(markerSettings[i].getMarkerId());
+            }
+            string AllMarkerIds = string.Join(",", Objects.allMarkerIds.Select(i => i.ToString()).ToArray());
+            PlayerPrefs.SetString("AllMarkerIds", AllMarkerIds);
+            PlayerPrefs.Save();
         }
 
 
@@ -86,9 +110,10 @@ namespace MarkerBasedARExample
             GameObject myButtonObject = GameObject.Find("ChangeMarkerButton");
             Button myButton = myButtonObject.GetComponent<Button>();
             myButton.GetComponentInChildren<Text>().text = "Selected Marker: " + index.ToString() + " PlayerPrefs:" + savedIndex.ToString();
+            Debug.Log("marker id" + markerSettings[savedIndex].getMarkerId());
+            
+            Objects.userData.SelectedMarkerIndex = savedIndex;
+            userAPI.UpdateUserByID(Objects.userData.userID, Objects.userData);
         }
-        
-        //TODO: store the selected marker index in file for access by other scripts, run in android
-
     }
 }

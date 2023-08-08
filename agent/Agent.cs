@@ -22,11 +22,15 @@ namespace AgentAPI
         private string DEFAULT_URL = "http://192.168.2.3:3000/";
         private const float RECONNECT_DELAY = 2f;
         private SocketIOUnity socket;
+        private string myUserId;
 
         private void Start()
         {
             // Make the UserAPI object persist between scenes
             DontDestroyOnLoad(gameObject);
+
+            // get myUserId from playerprefs
+            myUserId = PlayerPrefs.GetString("myUserId", "");
 
             // Set the BASE_URL variable using the input field value
             if (urlInputField != null && !string.IsNullOrEmpty(urlInputField.text))
@@ -65,7 +69,6 @@ namespace AgentAPI
 
         public IEnumerator ConnectToServer() {
             var uri = new Uri (BASE_URL+"socketio/");
-            socket = new SocketIOUnity(uri);
 
             socket = new SocketIOUnity(uri, new SocketIOOptions
                 {
@@ -100,57 +103,68 @@ namespace AgentAPI
             };
             ////
             socket.Connect();
-            //await socket.ConnectAsync();
+
             // wait for socket connection to be established
             yield return new WaitUntil(() => socket.Connected);
+
+            // If myUserId is not set, create a new user
+            if (string.IsNullOrEmpty(myUserId))
+            {
+                StartCoroutine(CreateNewUser());
+            }
+            // else, get all users from the server and check if myUserId is in the list
+            else
+            {
+                StartCoroutine(RestoreUser(myUserId));
+            }
             DebugText.LogToText("connected: "+socket.Connected, textComponent);
-
-            // create local empty user
-            Dictionary<string, object> user = CreateUser();
-
-            // create local empty users
-            Dictionary<string, object> users = CreateUsers();
-
-            GetAllUsers();
-    
-            // call user create event
-            socket.Emit("createSocketID", user);
         }
 
-        private IEnumerator EventHandler(){
-            // wait for socket connection to be established
-            yield return new WaitUntil(() => socket.Connected);
-            DebugText.LogToText("Socket.IO connected", textComponent);
-
-            // create local user based on his unique socket id
-            Dictionary<string, object> user = CreateUser();
-
-            // call user create event
-            socket.Emit("createSocketID", user);
-        }
-
-        private Dictionary<string, object> CreateUser()
+        private IEnumerator CreateNewUser()
         {
-            Dictionary<string, object> userData = new Dictionary<string, object>();
-            userData.Add("userID", "");
-            userData.Add("socketID", "");
-            userData.Add("SelectedMarkerIndex", -1);
-            userData.Add("NeighborKeywords", new List<string>());
-            userData.Add("MyKeywords", new List<string>());
-            userData.Add("NewKeywords", new List<string>());
-            userData.Add("CurrentStage", 0);
-            userData.Add("MyArticle", "");
-            userData.Add("NeighborArticles", new List<string>());
-            return userData;
+            // use the userData object to create a new user
+            socket.Emit("createUser", Objects.userData);
+            socket.On("userCreated", (response) =>
+            {
+                string jsonArray = response.ToString();
+                Objects.UserData[] userDataArray = JsonConvert.DeserializeObject<Objects.UserData[]>(jsonArray);
+                Objects.userData = userDataArray[0];
+
+            });
+
+            yield return new WaitUntil(() => Objects.userData.userID != null);
+            myUserId = Objects.userData.userID;
+            PlayerPrefs.SetString("myUserId", myUserId);
+            PlayerPrefs.Save();
+            DebugText.LogToText("Created user: " + myUserId, textComponent);
         }
 
-        private Dictionary<string, object> CreateUsers()
+        private IEnumerator RestoreUser(string myUserId)
         {
-            Dictionary<string, object> usersData = new Dictionary<string, object>();
-            usersData.Add("users", new List<Dictionary<string, object>>());
-            return usersData;
+            StartCoroutine(getUserIDs());
+            // wait until Objects.globalUserIds is set
+            yield return new WaitUntil(() => Objects.globalUserIds != null);
+            // Check if myUserId exists in Objects.globalUserIds
+            if (Objects.globalUserIds.Contains(myUserId))
+            {
+                // If myUserId exists, get the user data from the server
+                GetUserByID(myUserId, (userData) =>
+                {
+                    Objects.userData = userData;
+                    myUserId = Objects.userData.userID;
+                });
+                // wait for Objects.userData to be set
+                yield return new WaitUntil(() => Objects.userData.userID != null);
+                DebugText.LogToText("Restored user: " + Objects.userData.userID, textComponent);
+            }
+            else
+            {
+                // If myUserId does not exist, create a new user
+                StartCoroutine(CreateNewUser());
+            }
         }
 
+        // get the current stage
         public void GetCurrentStage(Action<string> callback)
         {
             socket.Emit("getCurrentStage");
@@ -161,6 +175,7 @@ namespace AgentAPI
             });
         }
 
+        // get the radius of the current stage
         public void GetRadius(Action<string> callback)
         {
             socket.Emit("getRadius");
@@ -171,16 +186,19 @@ namespace AgentAPI
             });
         }
 
-        public void GetAllUsers() {
+        // get all users
+        public IEnumerator GetAllUsers() {
             socket.Emit("getUsers");
-            socket.On("users", (data) => {
-                string jsonArray = data.ToString();
-                Debug.Log(jsonArray);
-
-                UsersData usersData = data.GetValue<UsersData>();
-                //UsersData usersData = JsonConvert.DeserializeObject<UsersData>(jsonArray);
-                Debug.Log("usersData: "+usersData);
+            socket.On("users", (response) => 
+            {
+                string jsonArray = response.ToString();
+                var userDataArray = JsonConvert.DeserializeObject<List<List<Objects.UserData>>>(jsonArray);
+                Debug.Log("userDataArray: "+ JsonConvert.SerializeObject(userDataArray));
+                Objects.allUsersData = userDataArray[0];
             });
+
+            // yield until Objects.allUsersData is set
+            yield return new WaitUntil(() => Objects.allUsersData != null);
         }
 
         // get a list of the userID of all users
@@ -194,51 +212,47 @@ namespace AgentAPI
             });
         }
 
-        public void GetUserByID(string userID, Action<UserData> callback)
+        public IEnumerator getUserIDs()
+        {
+            Objects.globalUserIds = null;
+            GetAllUserIDs((userIDs) =>
+            {
+                JArray jsonArrayObj = JArray.Parse(userIDs);
+                JArray userIdsArray = (JArray)jsonArrayObj[0];
+                List<string> userIds = new List<string>();
+                foreach (JToken userId in userIdsArray)
+                {
+                    userIds.Add(userId.ToString());
+                }
+                Objects.globalUserIds = userIds;
+            });
+
+            yield return new WaitUntil(() => Objects.globalUserIds != null);
+        }
+
+        // get a specific user by their userID
+        public void GetUserByID(string userID, Action<Objects.UserData> callback)
         {
             socket.Emit("getUserByID", userID);
             socket.On("userByID", (response) =>
             {
                 string jsonArray = response.ToString();
-                Debug.Log(jsonArray);
-
-                UserData userData = response.GetValue<UserData>();
-                //UserData userData = JsonConvert.DeserializeObject<UserData>(jsonArray);
-                Debug.Log("userData: "+userData);
-                callback(userData);
+                Objects.UserData[] userDataArray = JsonConvert.DeserializeObject<Objects.UserData[]>(jsonArray);
+                if (userDataArray != null && userDataArray.Length > 0)
+                {
+                    callback(userDataArray[0]);
+                }
+                else
+                {
+                    callback(null);
+                }
             });
         }
 
-        [System.Serializable]
-        public class UserData
+        // update a specific user by their userID
+        public void UpdateUserByID(string userID, Objects.UserData user)
         {
-            public string _id;
-            public string userID;
-            public string socketID;
-            public int SelectedMarkerIndex;
-            public List<string> NeighborKeywords;
-            public List<string> MyKeywords;
-            public List<string> NewKeywords;
-            public int CurrentStage;
-            public string MyArticle;
-            public List<string> NeighborArticles;
-            public int __v;
-        }
-
-        [System.Serializable]
-        public class UsersData
-        {
-            public List<List<UserData>> users;
-
-            public override string ToString()
-            {
-                return JsonUtility.ToJson(this);
-            }
-
-            public void Log()
-            {
-                Debug.Log("UsersData: " + JsonUtility.ToJson(this));
-            }
+            socket.Emit("updateUserByID", userID, user);
         }
     }
 }

@@ -15,15 +15,18 @@ using Newtonsoft.Json.Linq;
 
 namespace MarkerBasedARExample
 {
-    /// <summary>
+    /// <summary>   
     /// Gyro Sensor Marker Based AR Example
     /// An example of augmented reality display method with gyro sensor.
     /// </summary>
     [RequireComponent(typeof(WebCamTextureToMatHelper))]
     public class GyroSensorMarkerBasedARExample : MonoBehaviour
     {
+        public TextMeshProUGUI textComponent;
         // Add a public property to store the current stage
-        public int CurrentStage { get; set; } = 1;
+        public int currentStage = Objects.currentStage;
+        public GameObject keywordButtonPrefab;
+        public Transform keywordListContent;
 
         private int selectedMarkerIndex;
         /// <summary>
@@ -35,6 +38,7 @@ namespace MarkerBasedARExample
         /// The marker settings.
         /// </summary>
         public MarkerSettings[] markerSettings;
+        Dictionary<int, MarkerSettings> markerSettingsById = new Dictionary<int, MarkerSettings>();
 
         /// <summary>
         /// The texture.
@@ -75,16 +79,22 @@ namespace MarkerBasedARExample
         /// position of selected marker
         /// </summary>
         Vector3 selectedMarkerPosition =  Vector3.zero;
+        Vector3 candidateMarkerPosition = Vector3.zero;
 
         private Button changeCameraButton;
         private Button createKeywordsButton;
+        private Button getNeighbourKeywordsButton;
 
         public Canvas keywordsInputCanvas;
         public TMP_InputField keywordsInputField;
         public Button submitButton;
         private UserAPI userAPI;
-        private float myRadius;
-        private List<string> globalUserIds = new List<string>();
+        private float myRadius = Objects.myRadius;
+        private List<string> globalUserIds = Objects.globalUserIds;
+        private string myUserId = Objects.userData.userID;
+        List<Objects.Neighbour> neighbourList = new List<Objects.Neighbour>();
+        private List<int> neighboursIndex = new List<int>();
+        private List<int> AllMarkerIds = new List<int>();
 
 #if UNITY_EDITOR
         Vector3 rot;
@@ -93,11 +103,24 @@ namespace MarkerBasedARExample
         // Use this for initialization
         void Start()
         {
+            // get from PlayerPerfs AllMarkerIds
+            string allMarkerIds = PlayerPrefs.GetString("AllMarkerIds");
+            AllMarkerIds = allMarkerIds.Split(',').Select(int.Parse).ToList();
+
+            // grab TextMeshProUGUI textComponent from another scene
+            textComponent = GameObject.Find("DebugText").GetComponent<TextMeshProUGUI>();
+
             // Find the GameObject with the UserAPI component
             GameObject userObject = GameObject.Find("Agent");
 
             // Get the UserAPI component from the GameObject
             userAPI = userObject.GetComponent<UserAPI>();
+
+            // fill the keywordsInputField with the restored session keywords
+            if (Objects.userData.MyKeywords.Length > 0)
+            {
+                keywordsInputField.text = Objects.userData.MyKeywords[0];
+            }
 
             webCamTextureToMatHelper = gameObject.GetComponent<WebCamTextureToMatHelper>();
 
@@ -117,8 +140,13 @@ namespace MarkerBasedARExample
             GameObject createKeywordsObject = GameObject.Find("createKeywordsButton");
             createKeywordsButton = createKeywordsObject.GetComponent<Button>();
 
+            // Find the "getNeighbourKeywordsButton" object and get its Button component
+            GameObject getNeighbourKeywordsObject = GameObject.Find("getNeighbourKeywordsButton");
+            getNeighbourKeywordsButton = getNeighbourKeywordsObject.GetComponent<Button>();
+
             // Set the initial visibility of the button based on the current stage
-            createKeywordsButton.gameObject.SetActive(CurrentStage == 1);
+            createKeywordsButton.gameObject.SetActive(currentStage == 1);
+            getNeighbourKeywordsButton.gameObject.SetActive(currentStage == 2);
 
             // Add an OnClick event to the "createKeywordsButton" that shows the text input canvas
             createKeywordsButton.onClick.AddListener(() => {
@@ -131,23 +159,65 @@ namespace MarkerBasedARExample
             // Add an OnClick event to the "submitButton" that submits the text input and hides the canvas
             submitButton.onClick.AddListener(() => {
                 string inputText = keywordsInputField.text;
-                Debug.Log("Input text: " + inputText);
+
+                // go over the inputText and split it into an array of strings whenever there is a comma and  a space and store it in Objects.userData.MyKeywords array. Dont include the comma and space in the keyword.
+                Objects.userData.MyKeywords = inputText.Split(new string[] { ", " }, StringSplitOptions.None);
+                userAPI.UpdateUserByID(Objects.userData.userID, Objects.userData);
                 keywordsInputCanvas.gameObject.SetActive(false);
             });
+
+            // Add an OnClick event to the "getNeighbourKeywordsButton" that gets the neighbour keywords
+            getNeighbourKeywordsButton.onClick.AddListener(() => {
+                // add a mock                 Objects.userData.NeighborKeywords = new string[] { "" };
+                Objects.userData.NeighborKeywords = new string[] { "" };
+
+                Objects.allUsersData = null;
+                StartCoroutine(userAPI.GetAllUsers());
+                // wait until Objects.allUsersData is not null
+                while (Objects.allUsersData == null)
+
+                // debug purposes
+                neighboursIndex = AllMarkerIds;
+
+                for (int i = 0; i < AllMarkerIds.Count; i++)
+                {
+                    Debug.Log("AllMarkerIds["+i+"]: " + AllMarkerIds[i]);
+                    for (int j = 0; j < Objects.allUsersData.Count; j++)
+                    {
+                        Debug.Log("Objects.allUsersData["+j+"].SelectedMarkerIndex: " + Objects.allUsersData[j].SelectedMarkerIndex);
+                        if (Objects.allUsersData[j].SelectedMarkerIndex == i)
+                        {
+                            Debug.Log("match found at index " + i + " and " + j);
+                            Objects.userData.NeighborKeywords[0] = string.Join(" ", Objects.userData.NeighborKeywords[0], Objects.allUsersData[j].MyKeywords[0]);
+                        }
+                    }
+                }
+
+                if (Objects.userData.NeighborKeywords.Length > 0 && Objects.userData.NeighborKeywords[0] != null)
+                {
+                    DebugText.LogToText("Neighbour Keywords: " + string.Join(" ", Objects.userData.NeighborKeywords[0]), textComponent);
+                }
+                else
+                {
+                    DebugText.LogToText("No neighbour keywords found", textComponent);
+                }
+                userAPI.UpdateUserByID(Objects.userData.userID, Objects.userData);
+            });
+
+            foreach (MarkerSettings settings in markerSettings)
+            {
+                markerSettingsById[settings.getMarkerId()] = settings;
+            }
 
             InvokeRepeating("GetCurrentStage", 0f, 1f);
             InvokeRepeating("GetRadius", 0f, 1f);
             InvokeRepeating("getUserIDs", 0f, 1f);
-            // print the globalUserIds list to the console
-            InvokeRepeating("PrintGlobalUserIds", 0f, 1f);
         }
 
 //create PrintGlobalUserIds
         void PrintGlobalUserIds()
         {
             Debug.Log("Global User IDs: " + string.Join(", ", globalUserIds.ToArray()));
-            // print the first element of the globalUserIds list to the console
-            Debug.Log("First Global User ID: " + globalUserIds[0]);
         }
         /// <summary>
         /// Raises the web cam texture to mat helper initialized event.
@@ -273,6 +343,9 @@ namespace MarkerBasedARExample
         // Update is called once per frame
         void Update()
         {
+            // set neighboursIndex to null
+            neighboursIndex.Clear();
+
             if (!webCamTextureToMatHelper.IsPlaying() || !webCamTextureToMatHelper.DidUpdateThisFrame())
             {
                 return;
@@ -290,10 +363,9 @@ namespace MarkerBasedARExample
 
         void GetCurrentStage()
         {
-            userAPI.GetCurrentStage((currentStage) =>
+            userAPI.GetCurrentStage((CurrentStage) =>
             {
-                CurrentStage = int.Parse(currentStage);
-                Debug.Log("CurrentStage: " + CurrentStage);
+                currentStage = int.Parse(CurrentStage);
             });
         }
 
@@ -302,7 +374,6 @@ namespace MarkerBasedARExample
             userAPI.GetRadius((radius) =>
             {
                 myRadius = float.Parse(radius);
-                Debug.Log("Radius: " + myRadius);
             });
         }
 
@@ -321,13 +392,31 @@ namespace MarkerBasedARExample
             });
         }
 
+        public void getUserByID(string userID)
+        {
+            userAPI.GetUserByID(userID, (userData) =>
+            {
+                if (userData != null)
+                {
+                    Debug.Log("userID: " + userData.userID);
+                }
+                else
+                {
+                    Debug.Log("User not found");
+                }
+            });
+        }
+
         void UpdateUI(string buttonText)
         {
             // Update the text of the button using the stored reference
             changeCameraButton.GetComponentInChildren<Text>().text = buttonText;
 
             // Update the visibility of the "createKeywordsButton" based on the current stage
-            createKeywordsButton.gameObject.SetActive(CurrentStage == 1);
+            createKeywordsButton.gameObject.SetActive(currentStage == 1);
+
+            // Update the visibility of the "GetNeighbourKeywords" based on the current stage
+            getNeighbourKeywordsButton.gameObject.SetActive(currentStage == 2);
         }
 
         void ProcessMarkers(Mat rgbaMat, int selectedMarkerIndex)
@@ -338,51 +427,44 @@ namespace MarkerBasedARExample
 
             // findMarkers are the markers that are found in the current frame
             List<Marker> findMarkers = markerDetector.getFindMarkers();
-            if (CurrentStage == 1)
+            if (currentStage == 1)
             {
                 //debug
-                string buttonText = $"Marker: {selectedMarkerIndex} {markerSettings[selectedMarkerIndex].getMarkerId()} Stage: {CurrentStage}";
+                string buttonText = $"Marker: {selectedMarkerIndex} {markerSettings[selectedMarkerIndex].getMarkerId()} Stage: {currentStage}";
                 UpdateUI(buttonText);
 
                 HideDetectionRange();
 
                 foreach (Marker marker in findMarkers)
                 {
-                    MarkerSettings settings = markerSettings.FirstOrDefault(s => s.getMarkerId() == marker.id);
-
-                    if (settings != null)
+                    if (markerSettingsById.TryGetValue(marker.id, out MarkerSettings settings))
                     {
                         bool isSelectedMarker = (marker.id == selectedMarkerId);
                         UpdateARGameObject(marker, settings, isSelectedMarker);
                     }
                 }
             }
-            else if (CurrentStage == 2)
+            else if (currentStage == 2)
             {
-                //debug
-                string message = "Neighbours: ";
-                
                 foreach (Marker marker in findMarkers)
                 {
-                    MarkerSettings settings = markerSettings.FirstOrDefault(s => s.getMarkerId() == marker.id);
-
-                    if (settings != null)
+                    if (markerSettingsById.TryGetValue(marker.id, out MarkerSettings settings))
                     {
                         UpdateARGameObject(marker, settings, true);
 
                         SpawnMarkerRadius(markerSettings[selectedMarkerIndex], myRadius);
-                        // selectedMarkerPosition is the position of the selected marker
-                        selectedMarkerPosition =  markerSettings[selectedMarkerIndex].getARGameObject().transform.position;
-                        // if the marker is not the selected marker and is within the radius of the selected marker then it is a neighbour
-                        if (settings.getMarkerId() != selectedMarkerId && Vector3.Distance(selectedMarkerPosition, settings.getARGameObject().transform.position) <= 3f)
-                        {
-                            message += marker.id + ", ";
-                        }
 
+                        selectedMarkerPosition =  markerSettings[selectedMarkerIndex].getARGameObject().transform.position;
+                        candidateMarkerPosition = settings.getARGameObject().transform.position;
+                        if (Vector3.Distance(selectedMarkerPosition, candidateMarkerPosition) <= myRadius && Vector3.Distance(selectedMarkerPosition, candidateMarkerPosition) > 1f)
+                        {
+                            neighboursIndex.Add(settings.getMarkerId());
+                        }
                     }
                 }
                 //debug
-                string buttonText = $"Marker: {markerSettings[selectedMarkerIndex].getMarkerId()} Stage: {CurrentStage} {message}";
+                string message = "Neighbours: " + neighboursIndex.Count;
+                string buttonText = $"Marker: {markerSettings[selectedMarkerIndex].getMarkerId()} Stage: {currentStage} {message}";
                 UpdateUI(buttonText);
                 ShowDetectionRange();
             }

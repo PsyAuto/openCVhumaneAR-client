@@ -17,7 +17,7 @@ public class ChangeStage : MonoBehaviour
             currentValue = 1;
         
         // send value to other script
-        gyroSensorMarkerBasedARExample.CurrentStage = currentValue;
+        gyroSensorMarkerBasedARExample.currentStage = currentValue;
 
         GameObject myButtonObject = GameObject.Find("ChangeStage");
         Button myButton = myButtonObject.GetComponent<Button>();
