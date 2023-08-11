@@ -84,9 +84,13 @@ namespace MarkerBasedARExample
         private Button changeCameraButton;
         private Button createKeywordsButton;
         private Button getNeighbourKeywordsButton;
+        private Button createArticleButton;
 
         public Canvas keywordsInputCanvas;
+        public Canvas clusterCanvas;
+        public Canvas articleCanvas;
         public TMP_InputField keywordsInputField;
+        public TMP_InputField clusterInputField;
         public Button submitButton;
         private UserAPI userAPI;
         private float myRadius = Objects.myRadius;
@@ -95,6 +99,7 @@ namespace MarkerBasedARExample
         List<Objects.Neighbour> neighbourList = new List<Objects.Neighbour>();
         private List<int> neighboursIndex = new List<int>();
         private List<int> AllMarkerIds = new List<int>();
+        private GameObject newKeywordList;
 
 #if UNITY_EDITOR
         Vector3 rot;
@@ -106,6 +111,10 @@ namespace MarkerBasedARExample
             // get from PlayerPerfs AllMarkerIds
             string allMarkerIds = PlayerPrefs.GetString("AllMarkerIds");
             AllMarkerIds = allMarkerIds.Split(',').Select(int.Parse).ToList();
+
+            GameObject keywordList = GameObject.Find("KeywordList");
+            GameObject _newKeywordList = GameObject.Find("NewKeywordList");
+            newKeywordList = _newKeywordList;
 
             // grab TextMeshProUGUI textComponent from another scene
             textComponent = GameObject.Find("DebugText").GetComponent<TextMeshProUGUI>();
@@ -120,6 +129,12 @@ namespace MarkerBasedARExample
             if (Objects.userData.MyKeywords.Length > 0)
             {
                 keywordsInputField.text = Objects.userData.MyKeywords[0];
+            }
+
+            // fill the clusterInputField with the restored session cluster
+            if (Objects.userData.NewKeywords.Length > 0)
+            {
+                clusterInputField.text = Objects.userData.NewKeywords[0];
             }
 
             webCamTextureToMatHelper = gameObject.GetComponent<WebCamTextureToMatHelper>();
@@ -144,9 +159,25 @@ namespace MarkerBasedARExample
             GameObject getNeighbourKeywordsObject = GameObject.Find("getNeighbourKeywordsButton");
             getNeighbourKeywordsButton = getNeighbourKeywordsObject.GetComponent<Button>();
 
+            // Find the "createArticle" object and get its Button component
+            GameObject createArticleObject = GameObject.Find("createArticle");
+            createArticleButton = createArticleObject.GetComponent<Button>();
+
+            // Find the "ClusteredKeywordsCanvas" object and get its Canvas component
+            GameObject clusterCanvasObject = GameObject.Find("ClusteredKeywordsCanvas");
+            clusterCanvas = clusterCanvasObject.GetComponent<Canvas>();
+
+            // Find the "ClusteredKeywordsButton" object and get its Button component
+            GameObject clusterButtonObject = GameObject.Find("ClusteredKeywordsButton");
+            Button clusterButton = clusterButtonObject.GetComponent<Button>();
+
             // Set the initial visibility of the button based on the current stage
             createKeywordsButton.gameObject.SetActive(currentStage == 1);
             getNeighbourKeywordsButton.gameObject.SetActive(currentStage == 2);
+            clusterCanvas.gameObject.SetActive(currentStage == 2);
+            createArticleButton.gameObject.SetActive(currentStage == 3);
+            
+            //clusterCanvas.gameObject.SetActive(false);
 
             // Add an OnClick event to the "createKeywordsButton" that shows the text input canvas
             createKeywordsButton.onClick.AddListener(() => {
@@ -168,7 +199,7 @@ namespace MarkerBasedARExample
 
             // Add an OnClick event to the "getNeighbourKeywordsButton" that gets the neighbour keywords
             getNeighbourKeywordsButton.onClick.AddListener(() => {
-                // add a mock                 Objects.userData.NeighborKeywords = new string[] { "" };
+                keywordList.gameObject.SetActive(true);
                 Objects.userData.NeighborKeywords = new string[] { "" };
 
                 Objects.allUsersData = null;
@@ -196,12 +227,51 @@ namespace MarkerBasedARExample
                 if (Objects.userData.NeighborKeywords.Length > 0 && Objects.userData.NeighborKeywords[0] != null)
                 {
                     DebugText.LogToText("Neighbour Keywords: " + string.Join(" ", Objects.userData.NeighborKeywords[0]), textComponent);
+
+                    // Create a button for each keyword in the NeighborKeywords array
+                    foreach (string keyword in Objects.userData.NeighborKeywords[0].TrimStart().Split(' '))
+                    {
+                        // Instantiate a new keyword button from the prefab
+                        GameObject keywordButton = Instantiate(keywordButtonPrefab, keywordList.transform);
+                        keywordButton.layer = LayerMask.NameToLayer("UI");
+
+                        // Set the text of the button to the keyword
+                        keywordButton.GetComponentInChildren<TMP_Text>().text = keyword;
+
+                        // Add a listener to the button click event
+                        keywordButton.GetComponent<Button>().onClick.AddListener(() => {
+                            // switch between selected and unselected
+                            if (keywordButton.GetComponent<Image>().color == Color.white)
+                            {
+                                keywordButton.GetComponent<Image>().color = Color.green;
+                            }
+                            else
+                            {
+                                keywordButton.GetComponent<Image>().color = Color.white;
+                            }
+                        });
+                    }
+                    clusterCanvas.gameObject.SetActive(true);
                 }
                 else
                 {
                     DebugText.LogToText("No neighbour keywords found", textComponent);
                 }
                 userAPI.UpdateUserByID(Objects.userData.userID, Objects.userData);
+            });
+
+            // add clusterButton onClick event
+            clusterButton.onClick.AddListener(() => {
+                // grab clusterText input and split it into an array of strings whenever there is a comma and  a space and store it in Objects.userData.ClusteredKeywords array. Dont include the comma and space in the keyword.
+                Objects.userData.NewKeywords = clusterInputField.text.Split(new string[] { ", " }, StringSplitOptions.None);
+                userAPI.UpdateUserByID(Objects.userData.userID, Objects.userData);
+                clusterCanvas.gameObject.SetActive(false);
+                keywordList.gameObject.SetActive(false);
+            });
+
+            // Add an OnClick event to the "createArticleButton" that creates an article
+            createArticleButton.onClick.AddListener(() => {
+                CreateMyArticle();
             });
 
             foreach (MarkerSettings settings in markerSettings)
@@ -412,11 +482,12 @@ namespace MarkerBasedARExample
             // Update the text of the button using the stored reference
             changeCameraButton.GetComponentInChildren<Text>().text = buttonText;
 
-            // Update the visibility of the "createKeywordsButton" based on the current stage
             createKeywordsButton.gameObject.SetActive(currentStage == 1);
 
-            // Update the visibility of the "GetNeighbourKeywords" based on the current stage
             getNeighbourKeywordsButton.gameObject.SetActive(currentStage == 2);
+
+            newKeywordList.gameObject.SetActive(currentStage == 3);
+            createArticleButton.gameObject.SetActive(currentStage == 3);
         }
 
         void ProcessMarkers(Mat rgbaMat, int selectedMarkerIndex)
@@ -467,6 +538,45 @@ namespace MarkerBasedARExample
                 string buttonText = $"Marker: {markerSettings[selectedMarkerIndex].getMarkerId()} Stage: {currentStage} {message}";
                 UpdateUI(buttonText);
                 ShowDetectionRange();
+            }
+            else if (currentStage == 3)
+            {
+                //debug
+                string buttonText = $"Marker: {selectedMarkerIndex} {markerSettings[selectedMarkerIndex].getMarkerId()} Stage: {currentStage}";
+                UpdateUI(buttonText);
+            }
+        }
+
+        void CreateMyArticle()
+        {
+            // Destroy all existing keyword buttons
+            foreach (Transform child in newKeywordList.transform)
+            {
+                Destroy(child.gameObject);
+            }
+
+            // Create a button for each keyword in the Objects.userData.NewKeywords[0] array
+            foreach (string keyword in Objects.userData.NewKeywords[0].TrimStart().Split(' '))
+            {
+                // Instantiate a new keyword button from the prefab
+                GameObject newkeywordButton = Instantiate(keywordButtonPrefab, newKeywordList.transform);
+                newkeywordButton.layer = LayerMask.NameToLayer("UI");
+
+                // Set the text of the button to the keyword
+                newkeywordButton.GetComponentInChildren<TMP_Text>().text = keyword;
+
+                // Add a listener to the button click event
+                newkeywordButton.GetComponent<Button>().onClick.AddListener(() => {
+                    // switch between selected and unselected
+                    if (newkeywordButton.GetComponent<Image>().color == Color.white)
+                    {
+                        newkeywordButton.GetComponent<Image>().color = Color.green;
+                    }
+                    else
+                    {
+                        newkeywordButton.GetComponent<Image>().color = Color.white;
+                    }
+                });
             }
         }
 
