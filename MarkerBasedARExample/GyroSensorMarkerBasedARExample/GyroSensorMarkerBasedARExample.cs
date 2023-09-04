@@ -4,6 +4,7 @@ using OpenCVForUnity.UnityUtils;
 using OpenCVForUnity.UnityUtils.Helper;
 using OpenCVMarkerBasedAR;
 using System.Collections.Generic;
+using System.Collections;
 using System;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -26,6 +27,7 @@ namespace MarkerBasedARExample
         // Add a public property to store the current stage
         public int currentStage = Objects.currentStage;
         public GameObject keywordButtonPrefab;
+        public GameObject articlePrefab;
         public Transform keywordListContent;
 
         private int selectedMarkerIndex;
@@ -85,6 +87,7 @@ namespace MarkerBasedARExample
         private Button createKeywordsButton;
         private Button getNeighbourKeywordsButton;
         private Button createArticleButton;
+        private Button getMyFeedButton;
 
         public Canvas keywordsInputCanvas;
         public Canvas clusterCanvas;
@@ -98,8 +101,14 @@ namespace MarkerBasedARExample
         private string myUserId = Objects.userData.userID;
         List<Objects.Neighbour> neighbourList = new List<Objects.Neighbour>();
         private List<int> neighboursIndex = new List<int>();
+        private List<int> curentNeighboursIndex = new List<int>();
+        private List<int> curentNeighboursID = new List<int>();
         private List<int> AllMarkerIds = new List<int>();
         private GameObject newKeywordList;
+        private GameObject verticalLayout;
+        private List<string> neighbourUserID = new List<string>();
+        private float lastCheckTime = 0f;
+        private float checkInterval = 1f; // check every 1 second
 
 #if UNITY_EDITOR
         Vector3 rot;
@@ -108,13 +117,21 @@ namespace MarkerBasedARExample
         // Use this for initialization
         void Start()
         {
+            curentNeighboursIndex.Clear();
+
             // get from PlayerPerfs AllMarkerIds
             string allMarkerIds = PlayerPrefs.GetString("AllMarkerIds");
-            AllMarkerIds = allMarkerIds.Split(',').Select(int.Parse).ToList();
+            if (!string.IsNullOrEmpty(allMarkerIds))
+            {
+                AllMarkerIds = allMarkerIds.Split(',').Select(int.Parse).ToList();
+            }
 
             GameObject keywordList = GameObject.Find("KeywordList");
             GameObject _newKeywordList = GameObject.Find("NewKeywordList");
             newKeywordList = _newKeywordList;
+
+            // Find the "VerticalLayout" vertical layout group
+            verticalLayout = GameObject.Find("VerticalLayout");
 
             // grab TextMeshProUGUI textComponent from another scene
             textComponent = GameObject.Find("DebugText").GetComponent<TextMeshProUGUI>();
@@ -135,6 +152,12 @@ namespace MarkerBasedARExample
             if (Objects.userData.NewKeywords.Length > 0)
             {
                 clusterInputField.text = Objects.userData.NewKeywords[0];
+            }
+
+            // fill the articleInputField with the restored session article
+            if (Objects.userData.MyArticle != null)
+            {
+                articleCanvas.GetComponentInChildren<TMP_InputField>().text = Objects.userData.MyArticle;
             }
 
             webCamTextureToMatHelper = gameObject.GetComponent<WebCamTextureToMatHelper>();
@@ -171,11 +194,26 @@ namespace MarkerBasedARExample
             GameObject clusterButtonObject = GameObject.Find("ClusteredKeywordsButton");
             Button clusterButton = clusterButtonObject.GetComponent<Button>();
 
+            // Find the "ArticleCanvas" object and get its Canvas component
+            GameObject articleCanvasObject = GameObject.Find("ArticleCanvas");
+            articleCanvas = articleCanvasObject.GetComponent<Canvas>();
+
+            // Find the "ArticleSubmitButton" object and get its Button component
+            GameObject articleSubmitButtonObject = GameObject.Find("ArticleSubmitButton");
+            Button articleSubmitButton = articleSubmitButtonObject.GetComponent<Button>();
+
+            // Find the "getMyFeedButton" object and get its Button component
+            GameObject getMyFeedButtonObject = GameObject.Find("getMyFeedButton");
+            getMyFeedButton = getMyFeedButtonObject.GetComponent<Button>();
+
             // Set the initial visibility of the button based on the current stage
             createKeywordsButton.gameObject.SetActive(currentStage == 1);
             getNeighbourKeywordsButton.gameObject.SetActive(currentStage == 2);
             clusterCanvas.gameObject.SetActive(currentStage == 2);
             createArticleButton.gameObject.SetActive(currentStage == 3);
+            articleCanvas.gameObject.SetActive(currentStage == 3);
+            getMyFeedButton.gameObject.SetActive(currentStage == 4);
+            verticalLayout.gameObject.SetActive(false);
             
             //clusterCanvas.gameObject.SetActive(false);
 
@@ -202,31 +240,64 @@ namespace MarkerBasedARExample
                 keywordList.gameObject.SetActive(true);
                 Objects.userData.NeighborKeywords = new string[] { "" };
 
+                neighbourUserID.Clear();
+
                 Objects.allUsersData = null;
                 StartCoroutine(userAPI.GetAllUsers());
+
+                // create a coroutine that waits until Objects.allUsersData is not null
+                StartCoroutine(GetNeighbourKeywordsCoroutine());
+            });
+
+            // coroutine that waits for Objects.allUsersData to be set to a non-null value
+            IEnumerator GetNeighbourKeywordsCoroutine()
+            {
                 // wait until Objects.allUsersData is not null
-                while (Objects.allUsersData == null)
+                yield return new WaitUntil(() => Objects.allUsersData != null);
 
-                // debug purposes
-                neighboursIndex = AllMarkerIds;
+                curentNeighboursID = curentNeighboursIndex;
 
+                // curentNeighboursIndex.Clear();
+
+                // curentNeighboursIndex.Add(19165);
+                // curentNeighboursIndex.Add(43889);
+
+                // loop over allMarkerIds and compare it with curentNeighboursIndex. if there is a match, set curentNeighboursIndex[j] to i
                 for (int i = 0; i < AllMarkerIds.Count; i++)
                 {
-                    Debug.Log("AllMarkerIds["+i+"]: " + AllMarkerIds[i]);
+                    for (int j = 0; j < curentNeighboursID.Count; j++)
+                    {
+                        if (AllMarkerIds[i] == curentNeighboursID[j])
+                        {
+                            curentNeighboursID[j] = i;
+                        }
+                    }
+                }
+
+                // save curentNeighboursID to PlayerPerfs
+                PlayerPrefs.SetString("curentNeighboursID", string.Join(",", curentNeighboursID.ToArray()));
+                PlayerPrefs.Save();
+
+                DebugText.LogToText("curentNeighboursID with IDs: " + string.Join(", ", curentNeighboursID.ToArray()), textComponent);
+
+                for (int i = 0; i < curentNeighboursID.Count; i++)
+                {
                     for (int j = 0; j < Objects.allUsersData.Count; j++)
                     {
-                        Debug.Log("Objects.allUsersData["+j+"].SelectedMarkerIndex: " + Objects.allUsersData[j].SelectedMarkerIndex);
-                        if (Objects.allUsersData[j].SelectedMarkerIndex == i)
+                        //DebugText.LogToText("allUsersData["+j+"].SelectedMarkerIndex: " + Objects.allUsersData[j].SelectedMarkerIndex, textComponent);
+                        if (Objects.allUsersData[j].SelectedMarkerIndex == curentNeighboursID[i])
                         {
-                            Debug.Log("match found at index " + i + " and " + j);
+                            //DebugText.LogToText("match found at index " + i + " and " + j, textComponent);
                             Objects.userData.NeighborKeywords[0] = string.Join(" ", Objects.userData.NeighborKeywords[0], Objects.allUsersData[j].MyKeywords[0]);
+
+                            neighbourUserID.Add(Objects.allUsersData[j].userID);
                         }
                     }
                 }
 
                 if (Objects.userData.NeighborKeywords.Length > 0 && Objects.userData.NeighborKeywords[0] != null)
                 {
-                    DebugText.LogToText("Neighbour Keywords: " + string.Join(" ", Objects.userData.NeighborKeywords[0]), textComponent);
+                    //DebugText.LogToText("Neighbour Keywords: " + string.Join(" ", Objects.userData.NeighborKeywords[0]), textComponent);
 
                     // Create a button for each keyword in the NeighborKeywords array
                     foreach (string keyword in Objects.userData.NeighborKeywords[0].TrimStart().Split(' '))
@@ -258,7 +329,7 @@ namespace MarkerBasedARExample
                     DebugText.LogToText("No neighbour keywords found", textComponent);
                 }
                 userAPI.UpdateUserByID(Objects.userData.userID, Objects.userData);
-            });
+            }
 
             // add clusterButton onClick event
             clusterButton.onClick.AddListener(() => {
@@ -272,6 +343,30 @@ namespace MarkerBasedARExample
             // Add an OnClick event to the "createArticleButton" that creates an article
             createArticleButton.onClick.AddListener(() => {
                 CreateMyArticle();
+            });
+
+            // Add an OnClick event to the "articleSubmitButton" that submits MyArticle
+            articleSubmitButton.onClick.AddListener(() => {
+                // grab the article text from the input field
+                string articleText = articleCanvas.GetComponentInChildren<TMP_InputField>().text;
+                // store the article text in Objects.userData.MyArticle
+                Objects.userData.MyArticle = articleText;
+                // update the user data
+                userAPI.UpdateUserByID(Objects.userData.userID, Objects.userData);
+                // hide the article canvas
+                articleCanvas.gameObject.SetActive(false);
+                // destroy all existing keyword buttons
+                foreach (Transform child in newKeywordList.transform)
+                {
+                    Destroy(child.gameObject);
+                }
+            });
+
+            // Add an OnClick event to the "getMyFeedButton" that gets the neighbour articles
+            getMyFeedButton.onClick.AddListener(() => {
+                // set VerticalLayout to active
+                verticalLayout.gameObject.SetActive(true);
+                StartCoroutine(CreateNeighbourArticles());
             });
 
             foreach (MarkerSettings settings in markerSettings)
@@ -483,11 +578,17 @@ namespace MarkerBasedARExample
             changeCameraButton.GetComponentInChildren<Text>().text = buttonText;
 
             createKeywordsButton.gameObject.SetActive(currentStage == 1);
-
             getNeighbourKeywordsButton.gameObject.SetActive(currentStage == 2);
-
             newKeywordList.gameObject.SetActive(currentStage == 3);
             createArticleButton.gameObject.SetActive(currentStage == 3);
+            getMyFeedButton.gameObject.SetActive(currentStage == 4);
+            if (currentStage == 4){
+                verticalLayout.gameObject.SetActive(true);
+            }
+            else
+            {
+                verticalLayout.gameObject.SetActive(false);
+            }
         }
 
         void ProcessMarkers(Mat rgbaMat, int selectedMarkerIndex)
@@ -533,8 +634,28 @@ namespace MarkerBasedARExample
                         }
                     }
                 }
+
+                if (neighboursIndex.Count > 0 && neighboursIndex.Count > curentNeighboursIndex.Count)
+                {
+                    curentNeighboursIndex = neighboursIndex;
+                }
+
+                if (Time.time - lastCheckTime >= checkInterval)
+                {
+                    lastCheckTime = Time.time;
+
+                    if (neighboursIndex.Count > 0 && neighboursIndex.Count == curentNeighboursIndex.Count)
+                    {
+                        // check if the neighboursIndex has different values than the curentNeighboursIndex
+                        if (!neighboursIndex.SequenceEqual(curentNeighboursIndex))
+                        {
+                            curentNeighboursIndex = neighboursIndex;
+                        }
+                    }
+                }
+
                 //debug
-                string message = "Neighbours: " + neighboursIndex.Count;
+                string message = "curentNeighboursIndex: " + string.Join(", ", curentNeighboursIndex.ToArray());
                 string buttonText = $"Marker: {markerSettings[selectedMarkerIndex].getMarkerId()} Stage: {currentStage} {message}";
                 UpdateUI(buttonText);
                 ShowDetectionRange();
@@ -542,13 +663,60 @@ namespace MarkerBasedARExample
             else if (currentStage == 3)
             {
                 //debug
-                string buttonText = $"Marker: {selectedMarkerIndex} {markerSettings[selectedMarkerIndex].getMarkerId()} Stage: {currentStage}";
+                string message = "curentNeighboursID: " + string.Join(", ", curentNeighboursID.ToArray());
+                string buttonText = $"Marker: {selectedMarkerIndex} {markerSettings[selectedMarkerIndex].getMarkerId()} Stage: {currentStage} {message}";
                 UpdateUI(buttonText);
+            }
+            else if (currentStage == 4)
+            {
+                //debug
+                string message = "curentNeighboursID: " + string.Join(", ", curentNeighboursID.ToArray());
+                string buttonText = $"Marker: {selectedMarkerIndex} {markerSettings[selectedMarkerIndex].getMarkerId()} Stage: {currentStage} {message}";
+                UpdateUI(buttonText);
+
+            }
+        }
+
+        IEnumerator<object> CreateNeighbourArticles()
+        {
+            Objects.allUsersData = null;
+            StartCoroutine(userAPI.GetAllUsers());
+            // wait until Objects.allUsersData is not null
+            yield return new WaitUntil(() => Objects.allUsersData != null);
+
+            // destroy all existing article prefabs
+            foreach (Transform child in verticalLayout.transform)
+            {
+                Destroy(child.gameObject);
+            }
+
+            // get curentNeighboursID from PlayerPerfs
+            string curentNeighboursIDString = PlayerPrefs.GetString("curentNeighboursID");
+
+            if (!string.IsNullOrEmpty(curentNeighboursIDString))
+            {
+                curentNeighboursID = curentNeighboursIDString.Split(',').Select(int.Parse).ToList();
+            }
+            DebugText.LogToText("allUsersData.Count: " + Objects.allUsersData.Count + " curentNeighboursID.Count: " + curentNeighboursID.Count, textComponent);
+
+            // go over all the users and find the ones that are in the neighbourUserID list
+            for (int i = 0; i < Objects.allUsersData.Count; i++)
+            {
+                if (curentNeighboursID.Contains(Objects.allUsersData[i].SelectedMarkerIndex))
+                {
+                    // Instantiate a new article text from the article prefab
+                    GameObject newArticle = Instantiate(articlePrefab, verticalLayout.transform);
+                    newArticle.layer = LayerMask.NameToLayer("UI");
+
+                    newArticle.GetComponentInChildren<TMP_Text>().text = "Article: " + i +"\n"+"\n";
+                    newArticle.GetComponentInChildren<TMP_Text>().text += Objects.allUsersData[i].MyArticle + "\n";
+                }
             }
         }
 
         void CreateMyArticle()
         {
+            articleCanvas.gameObject.SetActive(true);
             // Destroy all existing keyword buttons
             foreach (Transform child in newKeywordList.transform)
             {

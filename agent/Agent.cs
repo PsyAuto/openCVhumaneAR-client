@@ -191,10 +191,11 @@ namespace AgentAPI
             socket.Emit("getUsers");
             socket.On("users", (response) => 
             {
+                // reset allUsersData
+                Objects.allUsersData = null;
                 string jsonArray = response.ToString();
                 var userDataArray = JsonConvert.DeserializeObject<List<List<Objects.UserData>>>(jsonArray);
-                Debug.Log("userDataArray: "+ JsonConvert.SerializeObject(userDataArray));
-                Objects.allUsersData = userDataArray[0];
+                Objects.allUsersData = userDataArray[0];            
             });
 
             // yield until Objects.allUsersData is set
